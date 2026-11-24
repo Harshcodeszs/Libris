@@ -1,0 +1,222 @@
+# LBLMS — Entity Relationship Diagram (ERD)
+
+**System:** Library Borrowing & Loan Management System  
+**Database:** PostgreSQL (Neon; manageable through pgAdmin 4)  
+**Schema:** Six tables — `account`, `student`, `librarian`, `book`, `borrow`, `fine`  
+**Source of truth:** `LBLMS_Neon_PostgreSQL_Schema.sql`
+
+## 1. Entities and attributes
+
+**Legend:** PK = Primary Key; FK = Foreign Key; UQ = Unique; NN = Not Null. Nullable unless noted otherwise.
+
+### ACCOUNT
+| Attribute | PostgreSQL type | Key / constraint |
+|---|---|---|
+| account_id | INTEGER IDENTITY | PK |
+| email | VARCHAR(255) | NN, UQ |
+| password_hash | TEXT | NN |
+| account_type | VARCHAR(12) | NN; `Student` or `Staff` |
+| is_active | BOOLEAN | NN; default `TRUE` |
+| must_change_password | BOOLEAN | NN; default `FALSE` |
+| mfa_secret | TEXT | Nullable |
+| mfa_enabled | BOOLEAN | NN; default `FALSE` |
+| created_at | TIMESTAMPTZ | NN; default `NOW()` |
+| updated_at | TIMESTAMPTZ | NN; default `NOW()`; updated by trigger |
+
+**Constraint:** When `mfa_enabled = TRUE`, `mfa_secret` must not be null. Encrypt MFA secrets at rest.
+
+### STUDENT
+| Attribute | PostgreSQL type | Key / constraint |
+|---|---|---|
+| student_id | INTEGER IDENTITY | PK |
+| account_id | INTEGER | FK → `account.account_id`; NN, UQ |
+| first_name | TEXT | NN |
+| last_name | TEXT | NN |
+| contact_number | TEXT | Nullable |
+| max_loan | INTEGER | NN; default 5; CHECK = 5 |
+| created_at | TIMESTAMPTZ | NN; default `NOW()` |
+
+### LIBRARIAN
+| Attribute | PostgreSQL type | Key / constraint |
+|---|---|---|
+| librarian_id | INTEGER IDENTITY | PK |
+| account_id | INTEGER | FK → `account.account_id`; NN, UQ |
+| first_name | TEXT | NN |
+| last_name | TEXT | NN |
+| role | VARCHAR(20) | NN; `Librarian` or `Superlibrarian` |
+| created_at | TIMESTAMPTZ | NN; default `NOW()` |
+| deleted_at | TIMESTAMPTZ | Nullable; soft deletion |
+
+**Constraint:** A partial unique index permits at most one non-deleted `Superlibrarian` profile. Ensuring one *active* Superlibrarian always exists requires application logic.
+
+### BOOK
+Each row represents **one physical book copy**, not a unique title.
+
+| Attribute | PostgreSQL type | Key / constraint |
+|---|---|---|
+| book_id | INTEGER IDENTITY | PK |
+| title | TEXT | NN |
+| author | TEXT | NN |
+| category | TEXT | NN |
+| status | VARCHAR(20) | NN; default `Available`; `Available`, `Borrowed`, `Lost`, `Damaged` |
+| created_at | TIMESTAMPTZ | NN; default `NOW()` |
+| deleted_at | TIMESTAMPTZ | Nullable; soft deletion |
+
+### BORROW
+| Attribute | PostgreSQL type | Key / constraint |
+|---|---|---|
+| borrow_id | INTEGER IDENTITY | PK |
+| student_id | INTEGER | FK → `student.student_id`; NN |
+| book_id | INTEGER | FK → `book.book_id`; NN |
+| processed_by_id | INTEGER | FK → `librarian.librarian_id`; nullable |
+| status | VARCHAR(20) | NN; default `pending`; `pending`, `active`, `returned`, `rejected`, `cancelled` |
+| request_date | TIMESTAMPTZ | NN; default `NOW()` |
+| borrow_date | TIMESTAMPTZ | Nullable |
+| approved_date | TIMESTAMPTZ | Nullable |
+| due_date | TIMESTAMPTZ | Nullable |
+| return_date | TIMESTAMPTZ | Nullable |
+| rejected_date | TIMESTAMPTZ | Nullable |
+| rejection_reason | TEXT | Nullable |
+| cancelled_date | TIMESTAMPTZ | Nullable |
+
+**Constraints:**
+- At most one `active` borrow per book (`UNIQUE` partial index on `book_id`).
+- An `active` borrow requires `borrow_date`, `approved_date`, `due_date`, and `processed_by_id`.
+- A `returned` borrow requires `borrow_date`, `due_date`, and `return_date`.
+- `rejected` requires `rejected_date`; `cancelled` requires `cancelled_date`.
+- `due_date > borrow_date` and `return_date >= borrow_date` when both dates are present.
+
+### FINE
+| Attribute | PostgreSQL type | Key / constraint |
+|---|---|---|
+| fine_id | INTEGER IDENTITY | PK |
+| borrow_id | INTEGER | FK → `borrow.borrow_id`; nullable for manually issued fines |
+| student_id | INTEGER | FK → `student.student_id`; NN |
+| settled_by | INTEGER | FK → `librarian.librarian_id`; nullable |
+| amount | NUMERIC(10,2) | NN; CHECK > 0 |
+| reason | VARCHAR(20) | NN; `Overdue`, `Damaged`, `Lost` |
+| status | VARCHAR(20) | NN; default `unpaid`; `unpaid`, `paid`, `waived` |
+| issued_date | DATE | NN; default `CURRENT_DATE` |
+| paid_date | DATE | Nullable |
+| waived_date | DATE | Nullable |
+
+**Constraints:** Paid fines require `paid_date`; waived fines require `waived_date`; unpaid fines require neither. Only one `Overdue` fine can reference a particular borrow, but additional `Damaged` or `Lost` fines may reference it.
+
+## 2. Relationships and cardinalities
+
+| Parent → Child | Cardinality | Foreign key |
+|---|---|---|
+| ACCOUNT → STUDENT | 1 → 0..1 | `student.account_id` (unique) |
+| ACCOUNT → LIBRARIAN | 1 → 0..1 | `librarian.account_id` (unique) |
+| STUDENT → BORROW | 1 → 0..many | `borrow.student_id` |
+| BOOK → BORROW | 1 → 0..many (historically) | `borrow.book_id` |
+| LIBRARIAN → BORROW | 1 → 0..many; borrow staff optional | `borrow.processed_by_id` |
+| STUDENT → FINE | 1 → 0..many | `fine.student_id` |
+| BORROW → FINE | 1 → 0..many; fine borrow optional | `fine.borrow_id` |
+| LIBRARIAN → FINE | 1 → 0..many; fine settlement staff optional | `fine.settled_by` |
+
+Every STUDENT and LIBRARIAN row belongs to exactly one ACCOUNT. The database's FKs do not by themselves prevent an ACCOUNT from having both profile types; FastAPI must validate that the profile matches `account_type`.
+
+## 3. ERD diagram (Mermaid)
+
+```mermaid
+erDiagram
+    ACCOUNT ||--o| STUDENT : authenticates
+    ACCOUNT ||--o| LIBRARIAN : authenticates
+    STUDENT ||--o{ BORROW : requests
+    BOOK ||--o{ BORROW : appears_in
+    LIBRARIAN o|--o{ BORROW : processes
+    STUDENT ||--o{ FINE : incurs
+    BORROW o|--o{ FINE : generates
+    LIBRARIAN o|--o{ FINE : settles
+
+    ACCOUNT {
+        int account_id PK
+        varchar email UK
+        text password_hash
+        varchar account_type
+        boolean is_active
+        boolean must_change_password
+        text mfa_secret
+        boolean mfa_enabled
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    STUDENT {
+        int student_id PK
+        int account_id FK,UK
+        text first_name
+        text last_name
+        text contact_number
+        int max_loan
+        timestamptz created_at
+    }
+    LIBRARIAN {
+        int librarian_id PK
+        int account_id FK,UK
+        text first_name
+        text last_name
+        varchar role
+        timestamptz created_at
+        timestamptz deleted_at
+    }
+    BOOK {
+        int book_id PK
+        text title
+        text author
+        text category
+        varchar status
+        timestamptz created_at
+        timestamptz deleted_at
+    }
+    BORROW {
+        int borrow_id PK
+        int student_id FK
+        int book_id FK
+        int processed_by_id FK
+        varchar status
+        timestamptz request_date
+        timestamptz borrow_date
+        timestamptz approved_date
+        timestamptz due_date
+        timestamptz return_date
+        timestamptz rejected_date
+        text rejection_reason
+        timestamptz cancelled_date
+    }
+    FINE {
+        int fine_id PK
+        int borrow_id FK
+        int student_id FK
+        int settled_by FK
+        decimal amount
+        varchar reason
+        varchar status
+        date issued_date
+        date paid_date
+        date waived_date
+    }
+```
+
+## 4. Borrowing and security rules
+
+These rules are **application-level** unless noted as a database constraint:
+
+1. **Five-item limit:** A student may have no more than five combined `pending` + `active` borrows. Lock the student row and recheck inside a transaction.
+2. **Loan period:** Approval or direct desk issuance activates a borrow. Set `borrow_date` and `approved_date` to the issuance time; set `due_date = borrow_date + INTERVAL '14 days'`.
+3. **Book availability:** Pending requests do not change BOOK status. Approval changes it to `Borrowed` and rejects competing pending requests in the same transaction.
+4. **One active loan per physical copy:** Enforced by a PostgreSQL partial unique index; also lock the book row during approval.
+5. **Overdue fines:** ₱5 per overdue calendar day per item. Unpaid recorded fines **or accrued but unrecorded overdue amounts** block new requests and loans, but not returns.
+6. **Fine settlement:** Record paid/waived status and date; retain the fine history.
+7. **Authorization:** Student accounts use STUDENT profiles; staff use LIBRARIAN profiles. Only the Superlibrarian manages librarian accounts.
+8. **MFA:** Mandatory for staff; optional for students. New librarians must change their temporary password and enroll in MFA. Encrypt TOTP secrets.
+9. **Superlibrarian protection:** Keep exactly one designated active Superlibrarian; prevent accidental deactivation or deletion.
+10. **History preservation:** Soft-delete books and librarians. All six tables use restrictive foreign-key deletion behavior to protect referenced history.
+
+## 5. Implementation notes
+
+- **Backend:** FastAPI + SQLAlchemy + Alembic.
+- **Database:** Neon PostgreSQL; pgAdmin 4 can connect to the same Neon database.
+- **Frontend:** React, connected to FastAPI endpoints rather than directly to Neon.
+- **Status values are case-sensitive:** BOOK uses `Available`/`Borrowed`/`Lost`/`Damaged`, while BORROW and FINE use lowercase statuses.
+- **Schema vs. rules:** PostgreSQL enforces keys, checks, and unique indexes; FastAPI transactions enforce cross-row business rules and account/profile consistency.
