@@ -1,0 +1,149 @@
+[
+  {
+    "id": "01-landing",
+    "group": "Public",
+    "title": "Landing page",
+    "note": "Hero, borrowing pillars and calls to action for signed-out visitors.",
+    "file": "svg/01-landing.svg"
+  },
+  {
+    "id": "02-login",
+    "group": "Public",
+    "title": "Sign in",
+    "note": "Single sign-in for students, librarians and superlibrarians. Role is detected from the account.",
+    "file": "svg/02-login.svg"
+  },
+  {
+    "id": "03-register",
+    "group": "Public",
+    "title": "Student registration",
+    "note": "Gmail-only registration with simulated email confirmation.",
+    "file": "svg/03-register.svg"
+  },
+  {
+    "id": "04-verify-email",
+    "group": "Public",
+    "title": "Verify email",
+    "note": "Simulated confirmation link via the floating Demo Mailbox.",
+    "file": "svg/04-verify-email.svg"
+  },
+  {
+    "id": "05-forgot-password",
+    "group": "Public",
+    "title": "Forgot password",
+    "note": "Sends a simulated reset link to the demo mailbox.",
+    "file": "svg/05-forgot-password.svg"
+  },
+  {
+    "id": "06-reset-password",
+    "group": "Public",
+    "title": "Reset password",
+    "note": "Verifies the simulated token and sets a new password.",
+    "file": "svg/06-reset-password.svg"
+  },
+  {
+    "id": "07-student-dashboard",
+    "group": "Student",
+    "title": "Student dashboard",
+    "note": "Loans on the left, catalog suggestions stacked on the right.",
+    "file": "svg/07-student-dashboard.svg"
+  },
+  {
+    "id": "08-catalog",
+    "group": "Student",
+    "title": "Browse catalog",
+    "note": "Search, filters and availability-aware request buttons.",
+    "file": "svg/08-catalog.svg"
+  },
+  {
+    "id": "09-book-detail",
+    "group": "Student",
+    "title": "Book detail",
+    "note": "Single-copy detail with availability, rules and request action.",
+    "file": "svg/09-book-detail.svg"
+  },
+  {
+    "id": "10-my-loans",
+    "group": "Student",
+    "title": "My loans",
+    "note": "Pending requests sit above active and returned loan history.",
+    "file": "svg/10-my-loans.svg"
+  },
+  {
+    "id": "11-my-fines",
+    "group": "Student",
+    "title": "My fines",
+    "note": "Outstanding balance, simulated payment and fine history.",
+    "file": "svg/11-my-fines.svg"
+  },
+  {
+    "id": "12-profile",
+    "group": "Student",
+    "title": "Profile & settings",
+    "note": "Editable details, password entry point and demo data reset.",
+    "file": "svg/12-profile.svg"
+  },
+  {
+    "id": "13-librarian-dashboard",
+    "group": "Librarian",
+    "title": "Librarian dashboard",
+    "note": "Overdue shelf on the left, four operation shortcuts stacked on the right.",
+    "file": "svg/13-librarian-dashboard.svg"
+  },
+  {
+    "id": "14-borrow-requests",
+    "group": "Librarian",
+    "title": "Borrow requests",
+    "note": "Approve or decline student requests; the copy changes status only on approval.",
+    "file": "svg/14-borrow-requests.svg"
+  },
+  {
+    "id": "15-manage-books",
+    "group": "Librarian",
+    "title": "Manage books",
+    "note": "One row per physical copy, with loan state and safe delete rules.",
+    "file": "svg/15-manage-books.svg"
+  },
+  {
+    "id": "16-borrow-return",
+    "group": "Librarian",
+    "title": "Borrow & return",
+    "note": "Desk-issued loans and returns with overdue estimates.",
+    "file": "svg/16-borrow-return.svg"
+  },
+  {
+    "id": "17-students",
+    "group": "Librarian",
+    "title": "Students",
+    "note": "Directory of borrowers with loan usage and unpaid balances.",
+    "file": "svg/17-students.svg"
+  },
+  {
+    "id": "18-fines",
+    "group": "Librarian",
+    "title": "Fines & payments",
+    "note": "Collect, waive or issue a fine; overdue charges are created on return.",
+    "file": "svg/18-fines.svg"
+  },
+  {
+    "id": "19-super-dashboard",
+    "group": "Superlibrarian",
+    "title": "Superlibrarian dashboard",
+    "note": "Librarian accounts on the left, oversight shortcuts on the right.",
+    "file": "svg/19-super-dashboard.svg"
+  },
+  {
+    "id": "20-librarian-accounts",
+    "group": "Superlibrarian",
+    "title": "Librarian accounts",
+    "note": "Create, edit and remove staff accounts. New accounts must change the temporary password.",
+    "file": "svg/20-librarian-accounts.svg"
+  },
+  {
+    "id": "21-change-password",
+    "group": "Access",
+    "title": "First sign-in password change",
+    "note": "Mandatory password update after a librarian receives a temporary credential.",
+    "file": "svg/21-change-password.svg"
+  }
+]
