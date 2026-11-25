@@ -48,7 +48,10 @@ The application starts with an empty local database: no books, students, staff a
 - Browse and search the catalog, view book details, and request available copies.
 - Track pending requests, current and past loans, including due dates and overdue status.
 - Cancel a request that has not been reviewed yet.
-- Review fines and pay them to restore borrowing privileges.
+- View outstanding fines and payment status.
+- Pay fines physically at the library counter.
+- Regain borrowing privileges once all outstanding fines
+  are marked as paid or waived by library staff.
 - Edit their profile and change their password.
 
 ### Librarians
@@ -58,7 +61,9 @@ The application starts with an empty local database: no books, students, staff a
 - Add, edit, and remove books.
 - Issue and return loans directly at the desk, with confirmation dialogs.
 - Look up students and review their borrowing history.
-- Collect or waive fines.
+- Receive fine payments at the library counter and mark
+  fines as paid in the system.
+- Waive fines when appropriate.
 
 ### Superlibrarians
 
@@ -86,12 +91,15 @@ src/
   components/
     books/        Book cover rendering
     layout/       App shell, navigation, public layout
-    ui/           Buttons, inputs, modals, badges, stat cards, etc.
+    ui/           Reusable UI components
   context/        Auth and toast providers
-  lib/            Local database, storage, auth, borrowing rules, stats, helpers
+  lib/            Local database, auth, rules, helpers
   pages/
-    student/      Dashboard, catalog, book detail, loans, fines
-    librarian/    Dashboard, borrow requests, books, loans, students, fines
+    auth/         Sign-in, registration, verification,
+                  forgot and reset password
+    student/      Dashboard, catalog, loans, fines
+    librarian/    Dashboard, requests, books, loans,
+                  students, fines
     super/        Dashboard, librarian management
   App.jsx         Route map and role guards
 ```
@@ -103,3 +111,6 @@ src/
 - Email verification, password reset delivery, and staff provisioning require external infrastructure and are not included.
 - Fine payment is recorded locally and does not process real payments.
 - The interface is responsive and works down to small mobile widths.
+- Fine payments are handled physically at the library
+  counter. Library staff receive payments and mark fines
+  as paid in the system. No online payment gateway is included.
