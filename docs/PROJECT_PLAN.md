@@ -71,9 +71,15 @@ Build a role-based web application for managing physical library copies, student
 - FR-05: Create/cancel student borrowing requests subject to eligibility checks.
 - FR-06: Approve/reject requests and create direct desk loans safely.
 - FR-07: Process returns and update book availability.
-- FR-08: Calculate, record, display, pay, and waive fines according to permissions.
+- FR-08: Calculate and display fines; students view their own fines and authorized staff record payments or waivers. No online payment gateway.
 - FR-09: Maintain student borrowing history and staff audit-relevant references.
 - FR-10: Allow only the Superlibrarian to manage librarian accounts.
+
+### Planned authentication and staff accountability
+
+Generate tokens using `secrets.token_urlsafe(32)`; store only SHA-256 hashes. Verification expires after 24 hours and password reset after 15 minutes. Send raw tokens only in HTTPS email links through Resend. Validate account, purpose, expiry and unused status; consume tokens atomically with the account update. Serialize issuance and consumption by locking the account row. On resend, delete previous unused tokens of the same type. Rate-limit requests and return generic reset responses. After password reset, invalidate existing sessions (session revocation mechanism to be designed during backend implementation). Never log raw tokens. Student sign-in requires verified email; staff provisioning and verification policy remains to be specified.
+
+Every approval or direct loan must record `processed_by_id` from the authenticated staff identity. This is an intentional backend rule stricter than the current frontend.
 
 ## 7. Nonfunctional Requirements
 
@@ -98,6 +104,7 @@ Build a role-based web application for managing physical library copies, student
 | DB administration | pgAdmin 4 | Connect to and manage Neon |
 | Authentication | JWT with secure HTTP-only cookies (planned) | Sessions |
 | Passwords | Argon2 | Password hashing |
+| Email delivery | Resend (planned) | Verification and password-reset links |
 | MFA | TOTP | Staff two-factor authentication |
 | Frontend hosting | Vercel (planned) | React deployment |
 | Backend hosting | Render (planned) | FastAPI deployment |
@@ -105,7 +112,7 @@ Build a role-based web application for managing physical library copies, student
 
 ## 9. Data Model
 
-Six entities: `account`, `student`, `librarian`, `book`, `borrow`, and `fine`. Student and Librarian have separate profiles connected to Account. The Superlibrarian is a `librarian.role`, not a separate table. See `ERD.md` and the PostgreSQL schema for full attributes, relationships, and constraints.
+Seven entities: `account`, `student`, `librarian`, `book`, `borrow`, `fine`, and `auth_token`. Student and Librarian have separate profiles connected to Account. The Superlibrarian is a `librarian.role`, not a separate table. See `ERD.md` and the PostgreSQL schema for full attributes, relationships, and constraints.
 
 ## 10. Existing Implementation vs Planned Work
 
@@ -131,6 +138,8 @@ Six entities: `account`, `student`, `librarian`, `book`, `borrow`, and `fine`. S
 
 ## 12. Acceptance Criteria
 
+- Verification and reset tokens expire, cannot be reused, and are stored only as hashes.
+- Every active loan has an authenticated staff processor.
 - All three roles can complete their documented journeys using persistent server data.
 - Borrowing rules hold even with simultaneous requests/approvals.
 - Only authorized staff can process loans, fines, and librarian accounts.

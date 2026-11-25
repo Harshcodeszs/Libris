@@ -2,7 +2,7 @@
 
 **System:** Library Borrowing & Loan Management System  
 **Database:** PostgreSQL (Neon; manageable through pgAdmin 4)  
-**Schema:** Six tables — `account`, `student`, `librarian`, `book`, `borrow`, `fine`  
+**Schema:** Seven tables — `account`, `student`, `librarian`, `book`, `borrow`, `fine`, `auth_token`  
 **Source of truth:** `LBLMS_Neon_PostgreSQL_Schema.sql`
 
 ## 1. Entities and attributes
@@ -15,6 +15,7 @@
 | account_id | INTEGER IDENTITY | PK |
 | email | VARCHAR(255) | NN, UQ |
 | password_hash | TEXT | NN |
+| email_verified_at | TIMESTAMPTZ | Nullable; NULL means unverified |
 | account_type | VARCHAR(12) | NN; `Student` or `Staff` |
 | is_active | BOOLEAN | NN; default `TRUE` |
 | must_change_password | BOOLEAN | NN; default `FALSE` |
@@ -24,6 +25,17 @@
 | updated_at | TIMESTAMPTZ | NN; default `NOW()`; updated by trigger |
 
 **Constraint:** When `mfa_enabled = TRUE`, `mfa_secret` must not be null. Encrypt MFA secrets at rest.
+
+### AUTH_TOKEN
+| Attribute | PostgreSQL type | Key / constraint |
+|---|---|---|
+| token_id | INTEGER IDENTITY | PK |
+| account_id | INTEGER | FK → `account.account_id`; NN |
+| token_hash | TEXT | NN, UQ; SHA-256 hex digest |
+| token_type | VARCHAR(30) | NN; `email_verification` or `password_reset` |
+| expires_at | TIMESTAMPTZ | NN; after created_at |
+| used_at | TIMESTAMPTZ | Nullable; single-use consumption time |
+| created_at | TIMESTAMPTZ | NN; default `NOW()` |
 
 ### STUDENT
 | Attribute | PostgreSQL type | Key / constraint |
@@ -106,11 +118,12 @@ Each row represents **one physical book copy**, not a unique title.
 
 | Parent → Child | Cardinality | Foreign key |
 |---|---|---|
+| ACCOUNT → AUTH_TOKEN | 1 → 0..many | `auth_token.account_id` |
 | ACCOUNT → STUDENT | 1 → 0..1 | `student.account_id` (unique) |
 | ACCOUNT → LIBRARIAN | 1 → 0..1 | `librarian.account_id` (unique) |
 | STUDENT → BORROW | 1 → 0..many | `borrow.student_id` |
 | BOOK → BORROW | 1 → 0..many (historically) | `borrow.book_id` |
-| LIBRARIAN → BORROW | 1 → 0..many; borrow staff optional | `borrow.processed_by_id` |
+| LIBRARIAN → BORROW | 1 → 0..many; staff required for active loans; otherwise nullable | `borrow.processed_by_id` |
 | STUDENT → FINE | 1 → 0..many | `fine.student_id` |
 | BORROW → FINE | 1 → 0..many; fine borrow optional | `fine.borrow_id` |
 | LIBRARIAN → FINE | 1 → 0..many; fine settlement staff optional | `fine.settled_by` |
@@ -121,6 +134,7 @@ Every STUDENT and LIBRARIAN row belongs to exactly one ACCOUNT. The database's F
 
 ```mermaid
 erDiagram
+    ACCOUNT ||--o{ AUTH_TOKEN : has
     ACCOUNT ||--o| STUDENT : authenticates
     ACCOUNT ||--o| LIBRARIAN : authenticates
     STUDENT ||--o{ BORROW : requests
@@ -134,6 +148,7 @@ erDiagram
         int account_id PK
         varchar email UK
         text password_hash
+        timestamptz email_verified_at
         varchar account_type
         boolean is_active
         boolean must_change_password
@@ -141,6 +156,15 @@ erDiagram
         boolean mfa_enabled
         timestamptz created_at
         timestamptz updated_at
+    }
+    AUTH_TOKEN {
+        int token_id PK
+        int account_id FK
+        text token_hash UK
+        varchar token_type
+        timestamptz expires_at
+        timestamptz used_at
+        timestamptz created_at
     }
     STUDENT {
         int student_id PK
@@ -207,11 +231,14 @@ These rules are **application-level** unless noted as a database constraint:
 3. **Book availability:** Pending requests do not change BOOK status. Approval changes it to `Borrowed` and rejects competing pending requests in the same transaction.
 4. **One active loan per physical copy:** Enforced by a PostgreSQL partial unique index; also lock the book row during approval.
 5. **Overdue fines:** ₱5 per overdue calendar day per item. Unpaid recorded fines **or accrued but unrecorded overdue amounts** block new requests and loans, but not returns.
-6. **Fine settlement:** Record paid/waived status and date; retain the fine history.
+6. **Fine settlement:** Only authorized staff record payments or waivers, including `settled_by` and the settlement date. Students only view fines.
 7. **Authorization:** Student accounts use STUDENT profiles; staff use LIBRARIAN profiles. Only the Superlibrarian manages librarian accounts.
 8. **MFA:** Mandatory for staff; optional for students. New librarians must change their temporary password and enroll in MFA. Encrypt TOTP secrets.
 9. **Superlibrarian protection:** Keep exactly one designated active Superlibrarian; prevent accidental deactivation or deletion.
-10. **History preservation:** Soft-delete books and librarians. All six tables use restrictive foreign-key deletion behavior to protect referenced history.
+10. **History preservation:** Soft-delete books and librarians. All seven tables use restrictive foreign-key deletion behavior to protect referenced history.
+
+11. **Staff accountability:** The current frontend may approve without a processor. The backend intentionally requires `processed_by_id` from the authenticated staff identity for approvals and direct issuance; preserve it on return.
+12. **Authentication tokens:** Generate tokens using `secrets.token_urlsafe(32)`; store only SHA-256 hashes. Verification expires after 24 hours and password reset after 15 minutes. Send raw tokens only in HTTPS email links through Resend. Validate account, purpose, expiry and unused status; consume tokens atomically with the account update. Serialize issuance and consumption by locking the account row. On resend, delete previous unused tokens of the same type. Rate-limit requests and return generic reset responses. After password reset, invalidate existing sessions (session revocation mechanism to be designed during backend implementation). Never log raw tokens. Student sign-in requires verified email; staff provisioning and verification policy remains to be specified.
 
 ## 5. Implementation notes
 

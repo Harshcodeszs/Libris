@@ -6,7 +6,7 @@
 
 ## 1. Existing Website Overview
 
-The website has three user roles: **Student**, **Librarian**, and **Superlibrarian**. Its current documented implementation uses browser `localStorage`; backend APIs, real email delivery, and payment processing are not yet connected.
+The website has three user roles: **Student**, **Librarian**, and **Superlibrarian**. Its current documented implementation uses browser `localStorage`; backend APIs, and real email delivery are not yet connected; online payment processing is out of scope.
 
 ## 2. Public Pages and Authentication
 
@@ -31,6 +31,13 @@ Landing Page
 - All authenticated roles can open their profile and change their password.
 - Protected pages require sign-in; unauthorized role access leads to a **403** page.
 - Staff MFA is required by the finalized security plan; actual server-side enforcement is part of the FastAPI integration, not a claim about the existing frontend.
+
+### Planned backend authentication (not implemented)
+
+- Registration → Resend verification email → validate token → mark email verified → sign in.
+- Forgot password → generic response → Resend reset email → validate token → set new password → consume token and invalidate sessions → sign in.
+
+Generate tokens using `secrets.token_urlsafe(32)`; store only SHA-256 hashes. Verification expires after 24 hours and password reset after 15 minutes. Send raw tokens only in HTTPS email links through Resend. Validate account, purpose, expiry and unused status; consume tokens atomically with the account update. Serialize issuance and consumption by locking the account row. On resend, delete previous unused tokens of the same type. Rate-limit requests and return generic reset responses. After password reset, invalidate existing sessions (session revocation mechanism to be designed during backend implementation). Never log raw tokens. Student sign-in requires verified email; staff provisioning and verification policy remains to be specified.
 
 ## 3. Student Pages and Navigation
 
@@ -181,7 +188,9 @@ Superlibrarian opens Librarian Accounts
 - Pending requests **do not reserve** copies.
 - Maximum **5 combined pending and active** loans per student.
 - An approved or directly issued loan lasts **14 days**.
-- Unpaid fines and accrued overdue charges block new requests or loans.
+- Current frontend: Recorded unpaid fines block new borrowing requests and loans until paid or waived.
+- Planned backend rule: Accrued but unrecorded overdue charges will also block new borrowing requests and loans.
+- Students can still return books despite outstanding fines.
 - Overdue fine: **₱5 per overdue calendar day per copy**.
 - Students can cancel only their own **pending** requests.
 - Staff actions must preserve loan and fine history; book and librarian removal uses soft deletion in the planned backend.
@@ -203,3 +212,7 @@ Superlibrarian opens Librarian Accounts
 ## 10. Scope Note
 
 This document describes **documented screens and flows**, not exact React route paths or component filenames. Confirm those against the current `src/` code before using them as implementation contracts. Do not treat planned backend features as already built.
+
+### Planned staff accountability
+
+Approval and direct issuance must record the authenticated librarian or superlibrarian in `processed_by_id`. The existing frontend may omit this value; the backend intentionally enforces it. Students view fines; only staff record payments and waivers. No online payment gateway.
