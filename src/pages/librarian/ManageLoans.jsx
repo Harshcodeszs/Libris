@@ -11,15 +11,13 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { getDB } from '../../lib/db'
 import {
-  borrowBook,
   getBorrowStatus,
   isOverdue,
   overdueDays,
   overdueFineEstimate,
-  returnBook,
 } from '../../lib/rules'
+import { issueDeskLoan, readStaffLoans, returnBorrowedBook } from '../../lib/borrowOperations'
 import { BORROW_STATUS, LOAN_PERIOD_DAYS, ROLE } from '../../lib/constants'
 import { addDaysISO, daysFromToday, formatDate, peso, todayISO } from '../../lib/format'
 import PageHeader from '../../components/ui/PageHeader'
@@ -70,34 +68,14 @@ export default function ManageLoans() {
   const [issuing, setIssuing] = useState(false)
   const [returnTarget, setReturnTarget] = useState(null)
   const [returning, setReturning] = useState(false)
-  // Read Operation
+  // Read Loans, counts, visible loans
   const { rows, students, availableBooks, pendingCount } = useMemo(() => {
-    const db = getDB()
-    const studentById = new Map(db.students.map((item) => [item.student_id, item]))
-    const bookById = new Map(db.books.map((item) => [item.book_id, item]))
-    const librarianById = new Map(db.librarians.map((item) => [item.librarian_id, item]))
-    const loanStatuses = [BORROW_STATUS.ACTIVE, BORROW_STATUS.RETURNED]
-
+    const loans = readStaffLoans()
     return {
-      rows: db.borrows
-        .filter((borrow) => loanStatuses.includes(getBorrowStatus(borrow)))
-        .sort((a, b) => b.borrow_date.localeCompare(a.borrow_date) || b.borrow_id - a.borrow_id)
-        .map((borrow) => ({
-          ...borrow,
-          student: studentById.get(borrow.student_id) || null,
-          book: bookById.get(borrow.book_id) || null,
-          librarian: borrow.librarian_id ? librarianById.get(borrow.librarian_id) || null : null,
-          loanState: statusFor(borrow),
-        })),
-      students: db.students
-        .slice()
-        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)),
-      availableBooks: db.books
-        .filter((book) => book.status === 'Available')
-        .sort((a, b) => a.title.localeCompare(b.title)),
-      pendingCount: db.borrows.filter(
-        (borrow) => getBorrowStatus(borrow) === BORROW_STATUS.PENDING,
-      ).length,
+      rows: loans.rows.map((row) => ({ ...row, loanState: statusFor(row) })),
+      students: loans.students,
+      availableBooks: loans.availableBooks,
+      pendingCount: loans.pendingCount,
     }
   }, [tick])
 
@@ -136,21 +114,12 @@ export default function ManageLoans() {
     setIssueOpen(true)
   }
 
-  const handleIssue = () => {
+  // Create Issue desk loan operation
+  const handleIssueDeskLoan = () => {
     setFormError('')
-    if (!issueForm.studentId || !issueForm.bookId) {
-      setFormError('Choose both a student and an available book.')
-      return
-    }
     setIssuing(true)
     try {
-      const borrow = borrowBook({
-        studentId: Number(issueForm.studentId),
-        bookId: Number(issueForm.bookId),
-        librarianId: user.id,
-        actorRole: user.role,
-        dueDate: issueForm.dueDate,
-      })
+      const borrow = issueDeskLoan(issueForm, user)
       notify(`Loan recorded. Due ${formatDate(borrow.due_date)}.`, 'success')
       setIssueOpen(false)
       setTab('active')
@@ -162,11 +131,12 @@ export default function ManageLoans() {
     }
   }
 
-  const handleReturn = () => {
+  // Update Return loan operation
+  const handleReturnLoan = () => {
     if (!returnTarget) return
     setReturning(true)
     try {
-      const result = returnBook(returnTarget.borrow_id)
+      const result = returnBorrowedBook(returnTarget.borrow_id)
       if (result.fine) {
         notify(
           `Returned ${result.lateDays} day(s) late. A ${peso(result.fine.amount)} overdue fine was issued.`,
@@ -407,7 +377,7 @@ export default function ManageLoans() {
             <Button variant="secondary" disabled={issuing} onClick={() => setIssueOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleIssue} loading={issuing} disabled={!availableBooks.length}>
+            <Button onClick={handleIssueDeskLoan} loading={issuing} disabled={!availableBooks.length}>
               Record loan
             </Button>
           </>
@@ -484,7 +454,7 @@ export default function ManageLoans() {
       <ConfirmDialog
         open={Boolean(returnTarget)}
         onClose={() => !returning && setReturnTarget(null)}
-        onConfirm={handleReturn}
+        onConfirm={handleReturnLoan}
         loading={returning}
         tone={returnTarget && isOverdue(returnTarget) ? 'danger' : 'primary'}
         title="Process this return?"

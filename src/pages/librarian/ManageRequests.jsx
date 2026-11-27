@@ -10,8 +10,12 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { getDB } from '../../lib/db'
-import { approveBorrow, getBorrowStatus, rejectBorrow } from '../../lib/rules'
+import { getBorrowStatus } from '../../lib/rules'
+import {
+  approveBorrowRequest,
+  readBorrowRequests,
+  rejectBorrowRequest,
+} from '../../lib/borrowOperations'
 import { BORROW_STATUS, LOAN_PERIOD_DAYS } from '../../lib/constants'
 import { addDaysISO, formatDate, fullName, todayISO } from '../../lib/format'
 import PageHeader from '../../components/ui/PageHeader'
@@ -23,8 +27,6 @@ import SearchInput from '../../components/ui/SearchInput'
 import EmptyState from '../../components/ui/EmptyState'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import BookCover from '../../components/books/BookCover'
-
-const reviewedStatuses = [BORROW_STATUS.REJECTED, BORROW_STATUS.CANCELLED]
 
 function requestStatusLabel(borrow) {
   const status = getBorrowStatus(borrow)
@@ -42,28 +44,13 @@ export default function ManageRequests() {
   const [action, setAction] = useState(null)
   const [working, setWorking] = useState(false)
 
+  // Read Requests, counts, visible requests
   const { pending, reviewed, availableCount } = useMemo(() => {
-    const db = getDB()
-    const studentById = new Map(db.students.map((item) => [item.student_id, item]))
-    const bookById = new Map(db.books.map((item) => [item.book_id, item]))
-
-    const decorate = (borrow) => ({
-      ...borrow,
-      student: studentById.get(borrow.student_id) || null,
-      book: bookById.get(borrow.book_id) || null,
-      requestState: requestStatusLabel(borrow),
-    })
-
+    const requests = readBorrowRequests()
     return {
-      pending: db.borrows
-        .filter((borrow) => getBorrowStatus(borrow) === BORROW_STATUS.PENDING)
-        .sort((a, b) => a.borrow_id - b.borrow_id)
-        .map(decorate),
-      reviewed: db.borrows
-        .filter((borrow) => reviewedStatuses.includes(getBorrowStatus(borrow)))
-        .sort((a, b) => b.borrow_id - a.borrow_id)
-        .map(decorate),
-      availableCount: db.books.filter((book) => book.status === 'Available').length,
+      pending: requests.pending.map((row) => ({ ...row, requestState: requestStatusLabel(row) })),
+      reviewed: requests.reviewed.map((row) => ({ ...row, requestState: requestStatusLabel(row) })),
+      availableCount: requests.availableCount,
     }
   }, [tick])
 
@@ -80,29 +67,21 @@ export default function ManageRequests() {
   const approve = (row) => setAction({ type: 'approve', row })
   const decline = (row) => setAction({ type: 'reject', row })
 
-  const handleConfirm = () => {
+  // UPDATE Approve request operation
+  const handleApproveRequest = () => {
     if (!action) return
     setWorking(true)
     try {
-      if (action.type === 'approve') {
-        const borrow = approveBorrow(action.row.borrow_id, {
-          librarianId: user.id,
-          actorRole: user.role,
-        })
-        notify(
-          `Request approved. “${action.row.book?.title || 'The copy'}” is due ${formatDate(
-            borrow.due_date,
-          )}.`,
-          'success',
-        )
-      } else {
-        rejectBorrow(action.row.borrow_id, {
-          librarianId: user.id,
-          actorRole: user.role,
-          reason: 'Declined by the library desk.',
-        })
-        notify('Request declined. The copy stays available for other students.', 'info')
-      }
+      const borrow = approveBorrowRequest(action.row.borrow_id, {
+        librarianId: user.id,
+        actorRole: user.role,
+      })
+      notify(
+        `Request approved. “${action.row.book?.title || 'The copy'}” is due ${formatDate(
+          borrow.due_date,
+        )}.`,
+        'success',
+      )
       setAction(null)
       setTick((value) => value + 1)
     } catch (error) {
@@ -111,6 +90,32 @@ export default function ManageRequests() {
     } finally {
       setWorking(false)
     }
+  }
+
+  // Update Reject request operation
+  const handleRejectRequest = () => {
+    if (!action) return
+    setWorking(true)
+    try {
+      rejectBorrowRequest(action.row.borrow_id, {
+        librarianId: user.id,
+        actorRole: user.role,
+        reason: 'Declined by the library desk.',
+      })
+      notify('Request declined. The copy stays available for other students.', 'info')
+      setAction(null)
+      setTick((value) => value + 1)
+    } catch (error) {
+      notify(error.message, 'error')
+      setAction(null)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const handleConfirm = () => {
+    if (action?.type === 'approve') handleApproveRequest()
+    else if (action?.type === 'reject') handleRejectRequest()
   }
 
   const dialog = action

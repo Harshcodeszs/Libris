@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   CircleDollarSign,
   HandCoins,
@@ -8,8 +8,8 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
-import { getDB } from '../../lib/db'
-import { getBorrowStatus, issueFine, payFine, waiveFine } from '../../lib/rules'
+import { getBorrowStatus } from '../../lib/rules'
+import { issueFineRecord, payFineRecord, readFines, waiveFineRecord } from '../../lib/fineOperations'
 import { BORROW_STATUS, FINE_REASONS, FINE_STATUS } from '../../lib/constants'
 import { formatDate, peso } from '../../lib/format'
 import PageHeader from '../../components/ui/PageHeader'
@@ -25,7 +25,7 @@ import EmptyState from '../../components/ui/EmptyState'
 
 export default function ManageFines() {
   const { notify } = useToast()
-  const [tick, setTick] = useState(0)
+  const [fineView, setFineView] = useState(readFines)
   const [tab, setTab] = useState('all')
   const [query, setQuery] = useState('')
   const [reason, setReason] = useState('all')
@@ -40,32 +40,12 @@ export default function ManageFines() {
   const [issuing, setIssuing] = useState(false)
   const [action, setAction] = useState(null)
   const [working, setWorking] = useState(false)
-  // Read Operation
-  const { fines, students, db } = useMemo(() => {
-    const store = getDB()
-    const studentById = new Map(store.students.map((item) => [item.student_id, item]))
-    const borrowById = new Map(store.borrows.map((item) => [item.borrow_id, item]))
-    const bookById = new Map(store.books.map((item) => [item.book_id, item]))
+  const { fines, students, borrows, bookById } = fineView
 
-    return {
-      db: store,
-      students: store.students
-        .slice()
-        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)),
-      fines: store.fines
-        .slice()
-        .sort((a, b) => b.issued_date.localeCompare(a.issued_date) || b.fine_id - a.fine_id)
-        .map((fine) => {
-          const borrow = fine.borrow_id ? borrowById.get(fine.borrow_id) : null
-          return {
-            ...fine,
-            student: studentById.get(fine.student_id) || null,
-            borrow: borrow || null,
-            book: borrow ? bookById.get(borrow.book_id) || null : null,
-          }
-        }),
-    }
-  }, [tick])
+  // Read operation
+  const handleReadFines = () => {
+    setFineView(readFines())
+  }
 
   const totals = {
     outstanding: fines
@@ -97,7 +77,7 @@ export default function ManageFines() {
   })
 
   const studentBorrows = issueForm.studentId
-    ? db.borrows
+    ? borrows
         .filter(
           (borrow) =>
             borrow.student_id === Number(issueForm.studentId) &&
@@ -113,29 +93,15 @@ export default function ManageFines() {
     setFormError('')
     setIssueOpen(true)
   }
-  // Create Operation
-  const handleIssue = () => {
+  // Issue operation
+  const handleIssueFine = () => {
     setFormError('')
-    if (!issueForm.studentId) {
-      setFormError('Choose the student the fine belongs to.')
-      return
-    }
-    const amount = Number(issueForm.amount)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setFormError('Enter a fine amount greater than zero.')
-      return
-    }
     setIssuing(true)
     try {
-      issueFine({
-        studentId: Number(issueForm.studentId),
-        borrowId: issueForm.borrowId ? Number(issueForm.borrowId) : null,
-        amount,
-        reason: issueForm.reason,
-      })
-      notify(`${peso(amount)} fine issued.`, 'success')
+      issueFineRecord(issueForm)
+      notify(`${peso(Number(issueForm.amount))} fine issued.`, 'success')
       setIssueOpen(false)
-      setTick((value) => value + 1)
+      handleReadFines()
     } catch (error) {
       setFormError(error.message)
     } finally {
@@ -143,25 +109,37 @@ export default function ManageFines() {
     }
   }
 
-  const handleAction = () => {
+  const settleFine = (operation, message, tone) => {
     if (!action) return
     setWorking(true)
     try {
-      if (action.type === 'pay') {
-        payFine(action.fine.fine_id)
-        notify(`${peso(action.fine.amount)} marked as paid.`, 'success')
-      } else {
-        waiveFine(action.fine.fine_id)
-        notify(`${peso(action.fine.amount)} fine waived.`, 'info')
-      }
+      operation(action.fine.fine_id)
+      notify(message, tone)
       setAction(null)
-      setTick((value) => value + 1)
+      handleReadFines()
     } catch (error) {
       notify(error.message, 'error')
       setAction(null)
     } finally {
       setWorking(false)
     }
+  }
+
+  // Pay operation
+  const handlePayFine = () => {
+    if (!action) return
+    settleFine(payFineRecord, `${peso(action.fine.amount)} marked as paid.`, 'success')
+  }
+
+  // Waive operation
+  const handleWaiveFine = () => {
+    if (!action) return
+    settleFine(waiveFineRecord, `${peso(action.fine.amount)} fine waived.`, 'info')
+  }
+
+  const handleAction = () => {
+    if (action?.type === 'pay') handlePayFine()
+    else if (action?.type === 'waive') handleWaiveFine()
   }
 
   return (
@@ -413,7 +391,7 @@ export default function ManageFines() {
             <Button variant="secondary" disabled={issuing} onClick={() => setIssueOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleIssue} loading={issuing}>
+            <Button onClick={handleIssueFine} loading={issuing}>
               Issue fine
             </Button>
           </>
@@ -489,7 +467,7 @@ export default function ManageFines() {
           >
             <option value="">No linked loan</option>
             {studentBorrows.map((borrow) => {
-              const book = db.books.find((item) => item.book_id === borrow.book_id)
+              const book = bookById.get(borrow.book_id)
               return (
                 <option key={borrow.borrow_id} value={borrow.borrow_id}>
                   {book?.title || 'Removed title'} · {formatDate(borrow.borrow_date)} ·{' '}

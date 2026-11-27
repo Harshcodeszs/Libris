@@ -10,13 +10,9 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { getDB, getStudent } from '../../lib/db'
-import {
-  activeBorrowsFor,
-  canBorrow,
-  pendingBorrowsFor,
-  requestBorrow,
-} from '../../lib/rules'
+import { getDB } from '../../lib/db'
+import { canBorrow } from '../../lib/rules'
+import { readStudentBorrowState, requestBorrowRecord } from '../../lib/borrowOperations'
 import { BOOK_STATUS, BOOK_STATUSES, CATEGORIES } from '../../lib/constants'
 import { peso } from '../../lib/format'
 import Button from '../../components/ui/Button'
@@ -38,13 +34,13 @@ export default function Catalog() {
   const [selected, setSelected] = useState(null)
   const [borrowing, setBorrowing] = useState(false)
 
-  const student = getStudent(user.id)
-  const activeCount = activeBorrowsFor(user.id).length
-
-  const pendingIds = useMemo(
-    () => new Set(pendingBorrowsFor(user.id).map((borrow) => borrow.book_id)),
+  // Read Borrow state, books, eligibility
+  const { student, active, pending } = useMemo(
+    () => readStudentBorrowState(user.id),
     [user.id, tick],
   )
+  const activeCount = active.length
+  const pendingIds = new Set(pending.map((borrow) => borrow.book_id))
   const pendingCount = pendingIds.size
 
   const books = useMemo(() => {
@@ -73,11 +69,12 @@ export default function Catalog() {
 
   const hasFilters = query.trim() || category !== 'all' || status !== 'all'
 
-  const handleRequest = () => {
+  // CREATE - Request Borrow
+  const handleRequestBorrow = () => {
     if (!selected) return
     setBorrowing(true)
     try {
-      requestBorrow({ studentId: user.id, bookId: selected.book_id })
+      requestBorrowRecord({ studentId: user.id, bookId: selected.book_id })
       notify(`Request sent for “${selected.title}”. A librarian will review it.`, 'success')
       setSelected(null)
       setTick((value) => value + 1)
@@ -295,7 +292,7 @@ export default function Catalog() {
       <ConfirmDialog
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
-        onConfirm={handleRequest}
+        onConfirm={handleRequestBorrow}
         loading={borrowing}
         title={selected ? `Request “${selected.title}”?` : 'Request this book?'}
         description={

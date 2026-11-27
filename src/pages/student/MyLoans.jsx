@@ -3,15 +3,13 @@ import { Link } from 'react-router-dom'
 import { BookMarked, BookOpen, CalendarClock, Clock, Inbox, ReceiptText } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { getBook, getDB } from '../../lib/db'
 import {
-  borrowsForStudent,
-  cancelBorrowRequest,
   getBorrowStatus,
   isOverdue,
   overdueDays,
   overdueFineEstimate,
 } from '../../lib/rules'
+import { cancelBorrowRequestRecord, readStudentLoans } from '../../lib/borrowOperations'
 import { BORROW_STATUS } from '../../lib/constants'
 import { daysFromToday, formatDate, peso } from '../../lib/format'
 import PageHeader from '../../components/ui/PageHeader'
@@ -51,18 +49,12 @@ export default function MyLoans() {
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelling, setCancelling] = useState(false)
 
+  // Read Loan history, counts, visible loans
   const { loans, pending } = useMemo(() => {
-    const fines = getDB().fines
-    const rows = borrowsForStudent(user.id).map((borrow) => ({
-      ...borrow,
-      book: getBook(borrow.book_id),
-      fine: fines.find((fine) => fine.borrow_id === borrow.borrow_id) || null,
-      state: stateFor(borrow),
-    }))
-    const loanStatuses = [BORROW_STATUS.ACTIVE, BORROW_STATUS.RETURNED]
+    const history = readStudentLoans(user.id)
     return {
-      loans: rows.filter((row) => loanStatuses.includes(getBorrowStatus(row))),
-      pending: rows.filter((row) => getBorrowStatus(row) === BORROW_STATUS.PENDING),
+      loans: history.loans.map((row) => ({ ...row, state: stateFor(row) })),
+      pending: history.pending.map((row) => ({ ...row, state: stateFor(row) })),
     }
   }, [user.id, tick])
 
@@ -83,11 +75,12 @@ export default function MyLoans() {
     return status === BORROW_STATUS.RETURNED
   })
 
-  const handleCancel = () => {
+  // UPDATE - Cancel Request
+  const handleCancelRequest = () => {
     if (!cancelTarget) return
     setCancelling(true)
     try {
-      cancelBorrowRequest(cancelTarget.borrow_id, user.id)
+      cancelBorrowRequestRecord(cancelTarget.borrow_id, user.id)
       notify('Borrow request cancelled.', 'info')
       setCancelTarget(null)
       setTick((value) => value + 1)
@@ -246,11 +239,15 @@ export default function MyLoans() {
                         </div>
                       </td>
                       <td className="whitespace-nowrap text-xs">
-                        {formatDate(row.borrow_date, 'MMM d, yyyy')}
+                        {row.state.key === 'rejected' ? 'Requested ' : ''}
+                        {formatDate(
+                          row.state.key === 'rejected' ? row.request_date || row.borrow_date : row.borrow_date,
+                          'MMM d, yyyy',
+                        )}
                       </td>
                       <td className="whitespace-nowrap text-xs">
-                        <span className={isOverdue(row) ? 'font-semibold text-red-600' : ''}>
-                          {formatDate(row.due_date, 'MMM d, yyyy')}
+                        <span className={row.state.key === 'overdue' ? 'font-semibold text-red-600' : ''}>
+                          {row.state.key === 'rejected' ? '—' : formatDate(row.due_date, 'MMM d, yyyy')}
                         </span>
                         {row.return_date ? (
                           <span className="block text-[11px] text-ink-faint">
@@ -278,7 +275,7 @@ export default function MyLoans() {
                               {row.fine.status}
                             </Badge>
                           </div>
-                        ) : isOverdue(row) ? (
+                        ) : row.state.key === 'overdue' ? (
                           <span className="text-red-600">
                             {peso(overdueFineEstimate(row))}
                             <span className="ml-1 text-[10px] text-red-500">est.</span>
@@ -317,13 +314,20 @@ export default function MyLoans() {
 
                     <dl className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-ink-muted">
                       <div>
-                        <dt className="text-ink-faint">Borrowed</dt>
-                        <dd>{formatDate(row.borrow_date, 'MMM d')}</dd>
+                        <dt className="text-ink-faint">
+                          {row.state.key === 'rejected' ? 'Requested' : 'Borrowed'}
+                        </dt>
+                        <dd>
+                          {formatDate(
+                            row.state.key === 'rejected' ? row.request_date || row.borrow_date : row.borrow_date,
+                            'MMM d',
+                          )}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-ink-faint">Due</dt>
-                        <dd className={isOverdue(row) ? 'font-semibold text-red-600' : ''}>
-                          {formatDate(row.due_date, 'MMM d')}
+                        <dd className={row.state.key === 'overdue' ? 'font-semibold text-red-600' : ''}>
+                          {row.state.key === 'rejected' ? '—' : formatDate(row.due_date, 'MMM d')}
                         </dd>
                       </div>
                     </dl>
@@ -333,7 +337,7 @@ export default function MyLoans() {
                         Fine <span className="font-semibold text-ink">{peso(row.fine.amount)}</span>{' '}
                         <span className="capitalize text-ink-faint">({row.fine.status})</span>
                       </p>
-                    ) : isOverdue(row) ? (
+                    ) : row.state.key === 'overdue' ? (
                       <p className="mt-2 text-[11px] text-red-600">
                         Estimated fine {peso(overdueFineEstimate(row))} ·{' '}
                         {overdueDays(row)} days late
@@ -390,7 +394,7 @@ export default function MyLoans() {
       <ConfirmDialog
         open={Boolean(cancelTarget)}
         onClose={() => !cancelling && setCancelTarget(null)}
-        onConfirm={handleCancel}
+        onConfirm={handleCancelRequest}
         loading={cancelling}
         tone="danger"
         title="Cancel this request?"

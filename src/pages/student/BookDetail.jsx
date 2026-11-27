@@ -12,15 +12,12 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { getBook, getDB, getStudent } from '../../lib/db'
+import { getBook, getDB } from '../../lib/db'
 import {
-  activeBorrowsFor,
   canBorrow,
   isOverdue,
-  pendingBorrowForStudentBook,
-  pendingBorrowsFor,
-  requestBorrow,
 } from '../../lib/rules'
+import { readStudentBorrowState, requestBorrowRecord } from '../../lib/borrowOperations'
 import { BOOK_STATUS } from '../../lib/constants'
 import { daysFromToday, formatDate, peso } from '../../lib/format'
 import Button from '../../components/ui/Button'
@@ -37,12 +34,14 @@ export default function BookDetail() {
   const [borrowing, setBorrowing] = useState(false)
   const [result, setResult] = useState(null)
 
-  const student = getStudent(user.id)
+  // Read Borrow state, book, current loan, pending request, eligibility, related books
+  const { student, active, pending: pendingRequests } = readStudentBorrowState(user.id)
   const book = getBook(Number(id))
-  const active = activeBorrowsFor(user.id)
   const currentLoan = book ? active.find((borrow) => borrow.book_id === book.book_id) : null
-  const pending = book ? pendingBorrowForStudentBook(user.id, book.book_id) : null
-  const pendingCount = pendingBorrowsFor(user.id).length
+  const pending = book
+    ? pendingRequests.find((borrow) => borrow.book_id === book.book_id) || null
+    : null
+  const pendingCount = pendingRequests.length
   const eligibility = book ? canBorrow(user.id, book.book_id) : { ok: false, reason: '' }
 
   const related = useMemo(() => {
@@ -56,12 +55,12 @@ export default function BookDetail() {
       )
       .slice(0, 3)
   }, [book, tick])
-  // Create Operation
-  const handleRequest = () => {
+  // CREATE - Issue Book (Direct Loan)
+  const handleRequestBorrow = () => {
     if (!book) return
     setBorrowing(true)
     try {
-      const request = requestBorrow({ studentId: user.id, bookId: book.book_id })
+      const request = requestBorrowRecord({ studentId: user.id, bookId: book.book_id })
       setResult(request)
       setConfirming(false)
       setTick((value) => value + 1)
@@ -311,7 +310,7 @@ export default function BookDetail() {
       <ConfirmDialog
         open={confirming}
         onClose={() => setConfirming(false)}
-        onConfirm={handleRequest}
+        onConfirm={handleRequestBorrow}
         loading={borrowing}
         tone="primary"
         title={`Request “${book.title}”?`}
