@@ -15,8 +15,8 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { updateOwnProfile } from '../lib/auth'
-import { getDB, getStudent, resetDB } from '../lib/db'
-import { activeBorrowsFor, unpaidFineTotal } from '../lib/rules'
+import { getDB, resetDB } from '../lib/db'
+import { readStudentProfile, updateStudentAccount } from '../lib/studentOperations'
 import { getLibrarianWorkload } from '../lib/stats'
 import { isValidPhone, normalizePhone } from '../lib/validation'
 import { ROLE, ROLE_LABEL } from '../lib/constants'
@@ -39,14 +39,18 @@ export default function Profile() {
   const [saving, setSaving] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
 
-  const student = user.role === ROLE.STUDENT ? getStudent(user.id) : null
+  // Student Profile Read Operation
+  const { student, openLoans, outstanding } =
+    user.role === ROLE.STUDENT
+      ? readStudentProfile(user.id)
+      : { student: null, openLoans: 0, outstanding: 0 }
   const db = getDB()
   const workload = user.role === ROLE.LIBRARIAN ? getLibrarianWorkload() : []
   const myLoans =
     user.role === ROLE.LIBRARIAN
       ? workload.find((item) => item.librarian.librarian_id === user.id)?.loans || 0
       : 0
-
+// Profile handler
   const handleSave = (event) => {
     event.preventDefault()
     setError('')
@@ -61,11 +65,13 @@ export default function Profile() {
 
     setSaving(true)
     try {
-      updateOwnProfile(user.role, user.id, {
+      const values = {
         firstName,
         lastName,
         contactNumber: normalizePhone(contactNumber),
-      })
+      }
+      if (user.role === ROLE.STUDENT) updateStudentAccount(user.id, values)
+      else updateOwnProfile(user.role, user.id, values)
       const next = refresh()
       if (next) {
         setFirstName(next.firstName)
@@ -86,9 +92,6 @@ export default function Profile() {
     notify('Local data cleared. Sign in again to continue.', 'info')
     navigate('/login', { replace: true })
   }
-
-  const openLoans = student ? activeBorrowsFor(user.id).length : 0
-  const outstanding = student ? unpaidFineTotal(user.id) : 0
 
   return (
     <div className="space-y-6">

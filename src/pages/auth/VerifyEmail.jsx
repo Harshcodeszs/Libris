@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, Loader2, MailX, ShieldCheck } from 'lucide-react'
-import { confirmRegistration } from '../../lib/auth'
+import { confirmStudentRegistration } from '../../lib/studentOperations'
 import { fullName } from '../../lib/format'
 import Button from '../../components/ui/Button'
 
@@ -11,6 +11,7 @@ export default function VerifyEmail() {
   const started = useRef(false)
   const [state, setState] = useState({ status: 'verifying', student: null, message: '' })
 
+  // Verification 
   useEffect(() => {
     if (started.current) return
     started.current = true
@@ -25,7 +26,7 @@ export default function VerifyEmail() {
     }
 
     try {
-      const student = confirmRegistration(token)
+      const student = confirmStudentRegistration(token)
       setState({ status: 'success', student, message: '' })
     } catch (error) {
       setState({ status: 'error', student: null, message: error.message })

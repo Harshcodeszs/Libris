@@ -8,15 +8,8 @@ import {
   Users,
   Wallet,
 } from 'lucide-react'
-import { getBook, getDB } from '../../lib/db'
-import {
-  activeBorrowsFor,
-  borrowsForStudent,
-  finesForStudent,
-  getBorrowStatus,
-  unpaidFineTotal,
-} from '../../lib/rules'
-import { BORROW_STATUS } from '../../lib/constants'
+import { getBook } from '../../lib/db'
+import { readStudentDirectory, readStudentRecord } from '../../lib/studentOperations'
 import { formatDate, fullName, peso } from '../../lib/format'
 import PageHeader from '../../components/ui/PageHeader'
 import SearchInput from '../../components/ui/SearchInput'
@@ -26,28 +19,12 @@ import Avatar from '../../components/ui/Avatar'
 import Modal from '../../components/ui/Modal'
 import EmptyState from '../../components/ui/EmptyState'
 
-const loanStatuses = [BORROW_STATUS.ACTIVE, BORROW_STATUS.RETURNED]
-
 export default function ManageStudents() {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
 
-  // Read Operation
-  const students = useMemo(() => {
-    return getDB()
-      .students.slice()
-      .sort((a, b) =>
-        `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`),
-      )
-      .map((student) => ({
-        ...student,
-        activeCount: activeBorrowsFor(student.student_id).length,
-        unpaid: unpaidFineTotal(student.student_id),
-        totalBorrows: borrowsForStudent(student.student_id).filter((borrow) =>
-          loanStatuses.includes(getBorrowStatus(borrow)),
-        ).length,
-      }))
-  }, [])
+  //Students Read Operation
+  const students = useMemo(readStudentDirectory, [])
 
   const filtered = students.filter((student) => {
     const haystack = `${student.first_name} ${student.last_name} ${student.student_email} ${student.student_id}`.toLowerCase()
@@ -58,14 +35,7 @@ export default function ManageStudents() {
   const withLoans = students.filter((student) => student.activeCount > 0).length
   const totalUnpaid = students.reduce((sum, student) => sum + student.unpaid, 0)
 
-  const detail = useMemo(() => {
-    if (!selected) return null
-    const borrows = borrowsForStudent(selected.student_id)
-      .filter((borrow) => loanStatuses.includes(getBorrowStatus(borrow)))
-      .slice(0, 8)
-    const fines = finesForStudent(selected.student_id)
-    return { borrows, fines }
-  }, [selected])
+  const detail = useMemo(() => readStudentRecord(selected?.student_id), [selected])
 
   return (
     <div className="space-y-6">

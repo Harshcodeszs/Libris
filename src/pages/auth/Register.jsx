@@ -15,8 +15,11 @@ import {
 } from 'lucide-react'
 import { useAuth, ROLE_HOME } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { allAccountEmails, getDB } from '../../lib/db'
-import { registerStudent, resendRegistration } from '../../lib/auth'
+import {
+  beginStudentRegistration,
+  readRegistrationEmails,
+  resendStudentRegistration,
+} from '../../lib/studentOperations'
 import { passwordStrength, validateRegistration } from '../../lib/validation'
 import { cn } from '../../lib/format'
 import Brand from '../../components/layout/Brand'
@@ -68,11 +71,7 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false)
   const [cooldown, setCooldown] = useState(0)
 
-  const takenEmails = useMemo(() => {
-    const emails = allAccountEmails()
-    getDB().pending_registrations.forEach((item) => emails.add(item.email))
-    return emails
-  }, [])
+  const takenEmails = useMemo(readRegistrationEmails, [])
 
   useEffect(() => {
     if (!user) return
@@ -106,7 +105,7 @@ export default function Register() {
     }
     setSubmitting(true)
     try {
-      const record = registerStudent(values)
+      const record = beginStudentRegistration(values)
       setPending(record)
       setCooldown(30)
       notify('Confirmation email sent. Open the link to activate your account.', 'info')
@@ -117,9 +116,10 @@ export default function Register() {
     }
   }
 
+  // Update pending registration record with a new confirmation token and email
   const handleResend = () => {
     try {
-      const next = resendRegistration(pending.email, pending.token)
+      const next = resendStudentRegistration(pending.email, pending.token)
       setPending(next)
       setCooldown(30)
       notify('A new confirmation email has been sent.', 'info')
