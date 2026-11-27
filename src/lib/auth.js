@@ -83,7 +83,7 @@ export function logout() {
   db.session = null
   saveDB(db)
 }
-
+//Student Registration
 export function registerStudent(values) {
   const email = normalizeEmail(values.email)
   if (!isGmail(email)) throw new Error('Registration requires a valid @gmail.com address.')
@@ -127,7 +127,7 @@ export function resendRegistration(email, previousToken) {
   saveDB(db)
   return pending
 }
-
+// Confirm Registration
 export function confirmRegistration(token) {
   if (!token) throw new Error('This confirmation link is missing its token.')
   const db = getDB()
@@ -248,7 +248,7 @@ function assertLibrarianEmail(email, ignoreId = null) {
   if (clash) throw new Error('Another account already uses this email address.')
   return normalized
 }
-
+// Create Librarian
 export function createLibrarian({ firstName, lastName, email, password }) {
   if (!firstName.trim() || !lastName.trim()) throw new Error('First and last name are required.')
   const normalized = assertLibrarianEmail(email)

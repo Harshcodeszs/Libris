@@ -45,14 +45,14 @@ Build a role-based web application for managing physical library copies, student
 
 ## 4. Borrowing and Fine Rules
 
-1. Each `book` row represents **one physical copy**.
+1. Each `book` row represents **one physical copy**. The retained unique title-and-author index prohibits duplicate non-deleted copies with the same normalized title and author.
 2. Maximum **5 combined pending requests and active loans** per student.
 3. Pending requests do **not** reserve copies; the book remains `Available`.
 4. Staff approval starts a **14-day loan** and changes the copy to `Borrowed`.
 5. Only one active loan per copy; approval rejects competing pending requests in the same database transaction.
 6. Overdue fines accrue at **₱5 per overdue calendar day per copy**.
 7. Unpaid fines or accrued overdue balances block new requests and new loans; returns remain allowed.
-8. Students cannot settle their own fines; staff record payments and waivers.
+8. Students pay at the library counter; staff record payments and waivers. Staff attribution is enforced by FastAPI, without an additional database CHECK requiring `settled_by`.
 9. Preserve historical loans/fines by soft-deleting referenced books and librarian profiles.
 10. Recheck eligibility, availability, and limits within PostgreSQL transactions to avoid race conditions.
 
@@ -65,7 +65,7 @@ Build a role-based web application for managing physical library copies, student
 ## 6. Functional Requirements
 
 - FR-01: Authenticate users and route them to role-specific dashboards.
-- FR-02: Register and verify student accounts; support password reset.
+- FR-02: Register and verify student accounts; automatically assign student IDs starting at 192021; support password reset.
 - FR-03: Restrict staff functions by role and enforce staff MFA.
 - FR-04: Display searchable book copies and their availability.
 - FR-05: Create/cancel student borrowing requests subject to eligibility checks.
@@ -114,6 +114,13 @@ Every approval or direct loan must record `processed_by_id` from the authenticat
 
 Seven entities: `account`, `student`, `librarian`, `book`, `borrow`, `fine`, and `auth_token`. Student and Librarian have separate profiles connected to Account. The Superlibrarian is a `librarian.role`, not a separate table. See `ERD.md` and the PostgreSQL schema for full attributes, relationships, and constraints.
 
+### ID generation (planned backend)
+
+- Student IDs: automatically generated starting at `192021`; students do not supply their IDs.
+- Librarian IDs: automatically generated starting at `1209022`.
+- Superlibrarian ID: fixed at `1209021`, assigned during provisioning.
+- Other entity IDs: automatically generated starting at `1`.
+
 ## 10. Existing Implementation vs Planned Work
 
 | Area | Existing frontend | Planned integration |
@@ -139,6 +146,7 @@ Seven entities: `account`, `student`, `librarian`, `book`, `borrow`, `fine`, and
 ## 12. Acceptance Criteria
 
 - Verification and reset tokens expire, cannot be reused, and are stored only as hashes.
+- Student and librarian IDs are generated automatically from their configured starting values; the Superlibrarian has the fixed ID.
 - Every active loan has an authenticated staff processor.
 - All three roles can complete their documented journeys using persistent server data.
 - Borrowing rules hold even with simultaneous requests/approvals.

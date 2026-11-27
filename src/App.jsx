@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { ROLE } from './lib/constants'
@@ -13,6 +13,9 @@ import VerifyEmail from './pages/auth/VerifyEmail'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import ChangePassword from './pages/auth/ChangePassword'
+const DevAccounts = import.meta.env.DEV
+  ? lazy(() => import('./pages/auth/DevAccounts'))
+  : null
 import Forbidden from './pages/Forbidden'
 import NotFound from './pages/NotFound'
 import Profile from './pages/Profile'
@@ -59,6 +62,12 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          {DevAccounts && (
+            <Route
+              path="/dev/accounts"
+              element={<Suspense fallback={<p className="container-page py-10">Loading test accounts…</p>}><DevAccounts /></Suspense>}
+            />
+          )}
         </Route>
 
         <Route

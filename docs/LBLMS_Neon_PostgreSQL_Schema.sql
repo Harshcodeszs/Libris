@@ -1,0 +1,173 @@
+-- LBLMS PostgreSQL schema | Neon | seven-table ERD
+-- Run on an EMPTY database. Business rules requiring cross-row checks
+-- must be enforced by FastAPI using PostgreSQL transactions and row locks.
+BEGIN;
+
+CREATE TABLE account (
+    account_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    email_verified_at TIMESTAMPTZ,
+    account_type VARCHAR(12) NOT NULL CHECK (account_type IN ('Student', 'Staff')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+    mfa_secret TEXT,
+    mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT account_mfa_secret_required CHECK (NOT mfa_enabled OR mfa_secret IS NOT NULL)
+);
+
+CREATE TABLE auth_token (
+    token_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES account(account_id) ON DELETE RESTRICT,
+    token_hash TEXT NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+    token_type VARCHAR(30) NOT NULL CHECK (token_type IN ('email_verification', 'password_reset')),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (expires_at > created_at),
+    CHECK (used_at IS NULL OR (used_at >= created_at AND used_at < expires_at))
+);
+CREATE INDEX idx_auth_token_account_type ON auth_token(account_id, token_type);
+
+CREATE TABLE student (
+    student_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    account_id INTEGER NOT NULL UNIQUE REFERENCES account(account_id) ON DELETE RESTRICT,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    contact_number TEXT,
+    max_loan INTEGER NOT NULL DEFAULT 5 CHECK (max_loan = 5),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE librarian (
+    librarian_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    account_id INTEGER NOT NULL UNIQUE REFERENCES account(account_id) ON DELETE RESTRICT,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('Librarian', 'Superlibrarian')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE TABLE book (
+    book_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title TEXT NOT NULL,
+    author TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'Available'
+        CHECK (status IN ('Available', 'Borrowed', 'Lost', 'Damaged')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE TABLE borrow (
+    borrow_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES student(student_id) ON DELETE RESTRICT,
+    book_id INTEGER NOT NULL REFERENCES book(book_id) ON DELETE RESTRICT,
+    processed_by_id INTEGER REFERENCES librarian(librarian_id) ON DELETE RESTRICT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'active', 'returned', 'rejected', 'cancelled')),
+    request_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    borrow_date TIMESTAMPTZ,
+    approved_date TIMESTAMPTZ,
+    due_date TIMESTAMPTZ,
+    return_date TIMESTAMPTZ,
+    rejected_date TIMESTAMPTZ,
+    rejection_reason TEXT,
+    cancelled_date TIMESTAMPTZ,
+    CONSTRAINT borrow_dates_order CHECK (
+        (due_date IS NULL OR borrow_date IS NULL OR due_date > borrow_date)
+        AND (return_date IS NULL OR borrow_date IS NULL OR return_date >= borrow_date)
+    ),
+    CONSTRAINT active_borrow_required_fields CHECK (
+        status <> 'active' OR
+        (borrow_date IS NOT NULL AND approved_date IS NOT NULL AND due_date IS NOT NULL AND processed_by_id IS NOT NULL)
+    ),
+    CONSTRAINT returned_borrow_required_fields CHECK (
+        status <> 'returned' OR
+        (borrow_date IS NOT NULL AND due_date IS NOT NULL AND return_date IS NOT NULL)
+    ),
+    CONSTRAINT rejected_borrow_required_fields CHECK (
+        status <> 'rejected' OR rejected_date IS NOT NULL
+    ),
+    CONSTRAINT cancelled_borrow_required_fields CHECK (
+        status <> 'cancelled' OR cancelled_date IS NOT NULL
+    )
+);
+
+CREATE TABLE fine (
+    fine_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    borrow_id INTEGER REFERENCES borrow(borrow_id) ON DELETE RESTRICT,
+    student_id INTEGER NOT NULL REFERENCES student(student_id) ON DELETE RESTRICT,
+    settled_by INTEGER REFERENCES librarian(librarian_id) ON DELETE RESTRICT,
+    amount NUMERIC(10,2) NOT NULL CHECK (amount > 0),
+    reason VARCHAR(20) NOT NULL CHECK (reason IN ('Overdue', 'Damaged', 'Lost')),
+    status VARCHAR(20) NOT NULL DEFAULT 'unpaid'
+        CHECK (status IN ('unpaid', 'paid', 'waived')),
+    issued_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    paid_date DATE,
+    waived_date DATE,
+    CONSTRAINT fine_settlement_dates CHECK (
+        (status = 'unpaid' AND paid_date IS NULL AND waived_date IS NULL)
+        OR (status = 'paid' AND paid_date IS NOT NULL AND waived_date IS NULL)
+        OR (status = 'waived' AND waived_date IS NOT NULL AND paid_date IS NULL)
+    )
+);
+
+-- Only one active loan for each physical copy.
+CREATE UNIQUE INDEX uq_borrow_one_active_per_book
+    ON borrow(book_id) WHERE status = 'active';
+
+-- Prevent duplicate automatically recorded overdue fines for one loan.
+-- Manual damaged/lost fines can still be recorded separately.
+CREATE UNIQUE INDEX uq_fine_one_overdue_per_borrow
+    ON fine(borrow_id) WHERE reason = 'Overdue' AND borrow_id IS NOT NULL;
+
+-- Only one active (not soft-deleted) superlibrarian profile.
+-- Also prevent multiple live profiles with the role; account deactivation
+-- must be guarded in FastAPI to ensure the sole superlibrarian stays active.
+CREATE UNIQUE INDEX uq_one_superlibrarian_profile
+    ON librarian(role) WHERE role = 'Superlibrarian' AND deleted_at IS NULL;
+
+CREATE INDEX idx_borrow_student_status ON borrow(student_id, status);
+CREATE INDEX idx_borrow_book_status ON borrow(book_id, status);
+CREATE INDEX idx_borrow_pending ON borrow(request_date) WHERE status = 'pending';
+CREATE INDEX idx_borrow_due ON borrow(due_date) WHERE status = 'active';
+CREATE INDEX idx_fine_student_status ON fine(student_id, status);
+CREATE INDEX idx_fine_borrow ON fine(borrow_id);
+CREATE INDEX idx_fine_settled_by ON fine(settled_by);
+CREATE INDEX idx_borrow_processed_by ON borrow(processed_by_id);
+
+-- Keep account.updated_at current when an account record changes.
+CREATE FUNCTION update_account_updated_at() RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_account_updated_at
+BEFORE UPDATE ON account
+FOR EACH ROW EXECUTE FUNCTION update_account_updated_at();
+
+COMMIT;
+
+-- APPLICATION-LEVEL RULES (FastAPI, in database transactions):
+-- 1. Lock student row; count pending + active borrows; limit = 5.
+-- 2. Check unpaid fines AND accrued unrecorded overdue amounts before request/issue.
+-- 3. On approval lock book row, recheck availability and student eligibility;
+--    set borrow_date/approved_date=NOW(), due_date=NOW()+INTERVAL '14 days',
+--    status='active', book.status='Borrowed'; reject competing pending requests.
+-- 4. On return, set return_date/status and book.status in same transaction;
+--    calculate overdue charges using library-local calendar days.
+-- 5. On cancellation allow only requesting student while status='pending'.
+-- 6. Verify account_type matches profile, staff MFA enabled, staff authorization,
+--    sole superlibrarian protection, and fine.student_id matches borrow.student_id.
+-- 7. Never hard-delete referenced book/librarian/account; use soft deletion.
+-- 8. Handle staff-issued desk loans as direct active transactions.
+
+-- 9. Approval/direct issuance: derive processed_by_id from authenticated staff; preserve on return.
+-- 10. Only authorized staff record payments/waivers and settled_by.
+-- 11. Auth tokens: Generate tokens using secrets.token_urlsafe(32); store only SHA-256 hashes. Verification expires after 24 hours and password reset after 15 minutes. Send raw tokens only in HTTPS email links through Resend. Validate account, purpose, expiry and unused status; consume tokens atomically with the account update. Serialize issuance and consumption by locking the account row. On resend, delete previous unused tokens of the same type. Rate-limit requests and return generic reset responses. After password reset, invalidate existing sessions (session revocation mechanism to be designed during backend implementation). Never log raw tokens. Student sign-in requires verified email; staff provisioning and verification policy remains to be specified.

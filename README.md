@@ -104,6 +104,35 @@ src/
   App.jsx         Route map and role guards
 ```
 
+Lblms/
+├── docs/                         # Keep planning documents in place.
+├── public/
+│   └── favicon.svg                # Keep the app's public icon in place.
+├── src/
+│   ├── components/                # Keep shared books/, layout/, and ui/ components.
+│   ├── context/                   # Keep AuthContext.jsx and ToastContext.jsx.
+│   ├── lib/                       # Keep current browser-data and helper modules for now.
+│   ├── pages/
+│   │   ├── auth/                  # Group account-access screens.
+│   │   │   ├── Login.jsx          # Sign-in screen; move from pages/.
+│   │   │   ├── Register.jsx       # Student registration; move from pages/.
+│   │   │   ├── VerifyEmail.jsx    # Registration confirmation; move from pages/.
+│   │   │   ├── ForgotPassword.jsx # Reset-request screen; move from pages/.
+│   │   │   ├── ResetPassword.jsx  # Password-reset screen; move from pages/.
+│   │   │   └── ChangePassword.jsx # Signed-in password change; move from pages/.
+│   │   ├── student/               # Keep student screens.
+│   │   ├── librarian/             # Keep librarian screens.
+│   │   ├── super/                 # Keep superlibrarian screens.
+│   │   └── Landing.jsx, Profile.jsx, Forbidden.jsx, NotFound.jsx
+│   ├── App.jsx                    # Keep the route map.
+│   ├── main.jsx                   # Keep the Vite entry point.
+│   └── index.css                  # Keep global styles.
+├── wireframes/                    # Keep generator, gallery, and SVGs together.
+├── index.html                     # Keep Vite's HTML entry.
+└── package.json, package-lock.json, *config.js
+
+
+
 ## Notes
 
 - This is a browser-only build. Data, accounts, loans, fines, and sessions are stored in `localStorage`.

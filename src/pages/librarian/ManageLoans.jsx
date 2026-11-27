@@ -70,7 +70,7 @@ export default function ManageLoans() {
   const [issuing, setIssuing] = useState(false)
   const [returnTarget, setReturnTarget] = useState(null)
   const [returning, setReturning] = useState(false)
-
+  // Read Operation
   const { rows, students, availableBooks, pendingCount } = useMemo(() => {
     const db = getDB()
     const studentById = new Map(db.students.map((item) => [item.student_id, item]))

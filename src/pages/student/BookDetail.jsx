@@ -56,7 +56,7 @@ export default function BookDetail() {
       )
       .slice(0, 3)
   }, [book, tick])
-
+  // Create Operation
   const handleRequest = () => {
     if (!book) return
     setBorrowing(true)

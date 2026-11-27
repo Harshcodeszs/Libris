@@ -37,7 +37,7 @@ export default function ManageBooks() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
-
+ // Read Operation
   const { books, activeByBook, studentById } = useMemo(() => {
     const db = getDB()
     return {
@@ -92,7 +92,7 @@ export default function ManageBooks() {
     setEditing(null)
     setFormError('')
   }
-
+// Create Operation
   const handleSubmit = (event) => {
     event.preventDefault()
     setFormError('')

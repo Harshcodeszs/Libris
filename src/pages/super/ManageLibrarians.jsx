@@ -42,7 +42,7 @@ export default function ManageLibrarians() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
-
+// Read Operation
   const { librarians, loanCounts } = useMemo(() => {
     const db = getDB()
     const counts = new Map()
@@ -104,7 +104,7 @@ export default function ManageLibrarians() {
     setForm((current) => ({ ...current, [field]: value }))
     if (formError) setFormError('')
   }
-
+// Create Operation
   const handleSubmit = () => {
     setFormError('')
     if (!form.firstName.trim() || !form.lastName.trim()) {

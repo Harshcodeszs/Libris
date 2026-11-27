@@ -40,7 +40,7 @@ export default function ManageFines() {
   const [issuing, setIssuing] = useState(false)
   const [action, setAction] = useState(null)
   const [working, setWorking] = useState(false)
-
+  // Read Operation
   const { fines, students, db } = useMemo(() => {
     const store = getDB()
     const studentById = new Map(store.students.map((item) => [item.student_id, item]))
@@ -113,7 +113,7 @@ export default function ManageFines() {
     setFormError('')
     setIssueOpen(true)
   }
-
+  // Create Operation
   const handleIssue = () => {
     setFormError('')
     if (!issueForm.studentId) {

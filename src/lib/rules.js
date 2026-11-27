@@ -158,7 +158,7 @@ export function canBorrow(studentId, bookId) {
 
   return { ok: true, reason: '' }
 }
-
+// Create Borrow Request
 export function requestBorrow({ studentId, bookId }) {
   const check = canBorrow(studentId, bookId)
   if (!check.ok) throw new Error(check.reason)
@@ -353,7 +353,7 @@ export function returnBook(borrowId) {
   saveDB(db)
   return { borrow, fine, lateDays }
 }
-
+// Fine Management
 export function issueFine({ studentId, borrowId = null, amount, reason }) {
   const db = getDB()
   const student = db.students.find((item) => item.student_id === Number(studentId))
@@ -409,7 +409,7 @@ export function waiveFine(fineId) {
   saveDB(db)
   return fine
 }
-
+// Create Book
 export function createBook({ title, author, category, status = BOOK_STATUS.AVAILABLE }) {
   if (!title.trim()) throw new Error('Title is required.')
   if (!author.trim()) throw new Error('Author is required.')

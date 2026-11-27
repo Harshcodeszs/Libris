@@ -32,6 +32,7 @@ export default function ManageStudents() {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
 
+  // Read Operation
   const students = useMemo(() => {
     return getDB()
       .students.slice()

@@ -94,7 +94,7 @@ export default function Register() {
     }
     if (formError) setFormError('')
   }
-
+//  Create operation Student 
   const handleSubmit = (event) => {
     event.preventDefault()
     setFormError('')
@@ -104,7 +104,6 @@ export default function Register() {
       setFormError('Please fix the highlighted fields before continuing.')
       return
     }
-
     setSubmitting(true)
     try {
       const record = registerStudent(values)
