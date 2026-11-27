@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   BookPlus,
   Library,
@@ -8,9 +8,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
-import { getDB } from '../../lib/db'
-import { createBook, deleteBook, getBorrowStatus, updateBook } from '../../lib/rules'
-import { BOOK_STATUS, BOOK_STATUSES, BORROW_STATUS, CATEGORIES } from '../../lib/constants'
+import { createBookRecord, deleteBookRecord, readBooks, updateBookRecord } from '../../lib/bookOperations'
+import { BOOK_STATUS, BOOK_STATUSES, CATEGORIES } from '../../lib/constants'
 import { formatDate, fullName } from '../../lib/format'
 import PageHeader from '../../components/ui/PageHeader'
 import Button from '../../components/ui/Button'
@@ -27,7 +26,7 @@ const emptyForm = { title: '', author: '', category: CATEGORIES[0], status: BOOK
 
 export default function ManageBooks() {
   const { notify } = useToast()
-  const [tick, setTick] = useState(0)
+  const [bookView, setBookView] = useState(readBooks)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [status, setStatus] = useState('all')
@@ -37,19 +36,12 @@ export default function ManageBooks() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
- // Read Operation
-  const { books, activeByBook, studentById } = useMemo(() => {
-    const db = getDB()
-    return {
-      books: db.books.slice().sort((a, b) => a.title.localeCompare(b.title)),
-      activeByBook: new Map(
-        db.borrows
-          .filter((borrow) => getBorrowStatus(borrow) === BORROW_STATUS.ACTIVE)
-          .map((borrow) => [borrow.book_id, borrow]),
-      ),
-      studentById: new Map(db.students.map((student) => [student.student_id, student])),
-    }
-  }, [tick])
+  const { books, activeByBook, studentById } = bookView
+
+  // Read operation
+  const handleReadBooks = () => {
+    setBookView(readBooks())
+  }
 
   const counts = {
     total: books.length,
@@ -92,26 +84,15 @@ export default function ManageBooks() {
     setEditing(null)
     setFormError('')
   }
-// Create Operation
-  const handleSubmit = (event) => {
-    event.preventDefault()
+  const saveBook = (operation, message) => {
     setFormError('')
-    if (!form.title.trim() || !form.author.trim()) {
-      setFormError('Title and author are required.')
-      return
-    }
     setSaving(true)
     try {
-      if (editing) {
-        updateBook(editing.book_id, form)
-        notify(`“${form.title}” updated.`, 'success')
-      } else {
-        createBook(form)
-        notify(`“${form.title}” added to the catalog.`, 'success')
-      }
+      operation()
+      notify(message, 'success')
       setModalOpen(false)
       setEditing(null)
-      setTick((value) => value + 1)
+      handleReadBooks()
     } catch (error) {
       setFormError(error.message)
     } finally {
@@ -119,13 +100,31 @@ export default function ManageBooks() {
     }
   }
 
-  const handleDelete = () => {
+  // Create operation
+  const handleCreateBook = () => {
+    saveBook(() => createBookRecord(form), `“${form.title}” added to the catalog.`)
+  }
+
+  // Update operation
+  const handleUpdateBook = () => {
+    if (!editing) return
+    saveBook(() => updateBookRecord(editing.book_id, form), `“${form.title}” updated.`)
+  }
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    if (editing) handleUpdateBook()
+    else handleCreateBook()
+  }
+
+  // Delete operation
+  const handleDeleteBook = () => {
     if (!deleteTarget) return
     try {
-      deleteBook(deleteTarget.book_id)
+      deleteBookRecord(deleteTarget.book_id)
       notify(`“${deleteTarget.title}” removed from the catalog.`, 'success')
       setDeleteTarget(null)
-      setTick((value) => value + 1)
+      handleReadBooks()
     } catch (error) {
       notify(error.message, 'error')
       setDeleteTarget(null)
@@ -448,7 +447,7 @@ export default function ManageBooks() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
+        onConfirm={handleDeleteBook}
         title={deleteTarget ? `Delete “${deleteTarget.title}”?` : 'Delete this book?'}
         description="The copy disappears from the catalog. Past borrow records are kept for reporting. Copies currently on loan cannot be deleted."
         confirmLabel="Delete book"
