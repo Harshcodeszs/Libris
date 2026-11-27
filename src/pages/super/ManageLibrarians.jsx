@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   KeyRound,
   Pencil,
@@ -9,9 +9,12 @@ import {
   Users,
 } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
-import { createLibrarian, deleteLibrarian, updateLibrarian } from '../../lib/auth'
-import { getDB } from '../../lib/db'
-import { isValidEmail, passwordIssues } from '../../lib/validation'
+import {
+  createLibrarianRecord,
+  deleteLibrarianRecord,
+  readLibrarians,
+  updateLibrarianRecord,
+} from '../../lib/librarianOperations'
 import { formatDate, fullName } from '../../lib/format'
 import PageHeader from '../../components/ui/PageHeader'
 import Button from '../../components/ui/Button'
@@ -34,7 +37,7 @@ const emptyForm = {
 
 export default function ManageLibrarians() {
   const { notify } = useToast()
-  const [tick, setTick] = useState(0)
+  const [librarianView, setLibrarianView] = useState(readLibrarians)
   const [query, setQuery] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -42,24 +45,12 @@ export default function ManageLibrarians() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
-// Read Operation
-  const { librarians, loanCounts } = useMemo(() => {
-    const db = getDB()
-    const counts = new Map()
-    db.borrows.forEach((borrow) => {
-      if (borrow.librarian_id) {
-        counts.set(borrow.librarian_id, (counts.get(borrow.librarian_id) || 0) + 1)
-      }
-    })
-    return {
-      librarians: db.librarians
-        .slice()
-        .sort((a, b) =>
-          `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`),
-        ),
-      loanCounts: counts,
-    }
-  }, [tick])
+  const { librarians, loanCounts } = librarianView
+
+  // Read operation
+  const handleReadLibrarians = () => {
+    setLibrarianView(readLibrarians())
+  }
 
   const pending = librarians.filter((item) => item.must_change_password).length
   const totalLoans = librarians.reduce(
@@ -104,58 +95,15 @@ export default function ManageLibrarians() {
     setForm((current) => ({ ...current, [field]: value }))
     if (formError) setFormError('')
   }
-// Create Operation
-  const handleSubmit = () => {
+  const saveLibrarian = (operation, message) => {
     setFormError('')
-    if (!form.firstName.trim() || !form.lastName.trim()) {
-      setFormError('First and last name are required.')
-      return
-    }
-    if (!isValidEmail(form.email)) {
-      setFormError('Enter a valid email address for the librarian.')
-      return
-    }
-
-    const needsPassword = !editing || Boolean(form.password)
-    if (needsPassword) {
-      const issues = passwordIssues(form.password)
-      if (issues.length) {
-        setFormError(`Password needs ${issues.join(', ')}.`)
-        return
-      }
-      if (form.password !== form.confirmPassword) {
-        setFormError('The two passwords do not match.')
-        return
-      }
-    }
-
     setSaving(true)
     try {
-      if (editing) {
-        updateLibrarian(editing.librarian_id, {
-          firstName: form.firstName,
-          lastName: form.lastName,
-          email: form.email,
-          password: form.password || undefined,
-        })
-        notify(
-          form.password
-            ? 'Librarian updated. The new password must be changed at their next sign-in.'
-            : 'Librarian account updated.',
-          'success',
-        )
-      } else {
-        createLibrarian({
-          firstName: form.firstName,
-          lastName: form.lastName,
-          email: form.email,
-          password: form.password,
-        })
-        notify('Librarian account created. They must set a new password on first sign-in.', 'success')
-      }
+      operation()
+      notify(message, 'success')
       setModalOpen(false)
       setEditing(null)
-      setTick((value) => value + 1)
+      handleReadLibrarians()
     } catch (error) {
       setFormError(error.message)
     } finally {
@@ -163,13 +111,38 @@ export default function ManageLibrarians() {
     }
   }
 
-  const handleDelete = () => {
+  // Create operation
+  const handleCreateLibrarian = () => {
+    saveLibrarian(
+      () => createLibrarianRecord(form),
+      'Librarian account created. They must set a new password on first sign-in.',
+    )
+  }
+
+  // Update operation
+  const handleUpdateLibrarian = () => {
+    if (!editing) return
+    saveLibrarian(
+      () => updateLibrarianRecord(editing.librarian_id, form),
+      form.password
+        ? 'Librarian updated. The new password must be changed at their next sign-in.'
+        : 'Librarian account updated.',
+    )
+  }
+
+  const handleSubmit = () => {
+    if (editing) handleUpdateLibrarian()
+    else handleCreateLibrarian()
+  }
+
+  // Delete operation (temporarily disabled to preserve loan history)
+  const handleDeleteLibrarian = () => {
     if (!deleteTarget) return
     try {
-      deleteLibrarian(deleteTarget.librarian_id)
+      deleteLibrarianRecord(deleteTarget.librarian_id)
       notify(`${fullName(deleteTarget)}'s account was removed.`, 'success')
       setDeleteTarget(null)
-      setTick((value) => value + 1)
+      handleReadLibrarians()
     } catch (error) {
       notify(error.message, 'error')
       setDeleteTarget(null)
@@ -181,7 +154,7 @@ export default function ManageLibrarians() {
       <PageHeader
         eyebrow="Administration"
         title="Librarian accounts"
-        description="Create, edit and remove librarian accounts. Superlibrarian accounts are separate and cannot be managed from here."
+        description="Create and edit librarian accounts. Deletion is temporarily unavailable. Superlibrarian accounts are separate and cannot be managed from here."
         actions={
           <Button onClick={openCreate}>
             <UserPlus size={16} />
@@ -281,10 +254,10 @@ export default function ManageLibrarians() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setDeleteTarget(librarian)}
-                          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-red-50 hover:text-red-600"
+                          disabled
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-faint disabled:cursor-not-allowed disabled:opacity-55"
                           aria-label={`Delete ${fullName(librarian)}`}
-                          title="Delete account"
+                          title="Deletion is temporarily unavailable"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -321,7 +294,7 @@ export default function ManageLibrarians() {
                     <Pencil size={13} />
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(librarian)}>
+                  <Button size="sm" variant="ghost" disabled title="Deletion is temporarily unavailable">
                     <Trash2 size={13} />
                     Delete
                   </Button>
@@ -359,8 +332,8 @@ export default function ManageLibrarians() {
       <div className="flex items-start gap-3 rounded-2xl border border-cream-300 bg-cream-50 p-4 text-sm text-ink-muted">
         <ShieldCheck size={18} className="mt-0.5 shrink-0 text-forest-600" aria-hidden="true" />
         <p>
-          Deleting a librarian keeps their past loan records intact and shows “Former librarian” in
-          circulation history. New accounts must replace their initial password on first sign-in.
+          Librarian deletion is temporarily unavailable to preserve loan history. New accounts must
+          replace their initial password on first sign-in.
         </p>
       </div>
 
@@ -456,9 +429,9 @@ export default function ManageLibrarians() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
+        onConfirm={handleDeleteLibrarian}
         title={deleteTarget ? `Delete ${fullName(deleteTarget)}?` : 'Delete this account?'}
-        description="The librarian will no longer be able to sign in. Their past checkout records stay in circulation history and will show as “Former librarian”."
+        description="Librarian deletion is temporarily unavailable to preserve historical loan records."
         confirmLabel="Delete account"
         tone="danger"
       />

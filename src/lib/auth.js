@@ -291,26 +291,8 @@ export function updateLibrarian(librarianId, { firstName, lastName, email, passw
   return librarian
 }
 
-export function deleteLibrarian(librarianId) {
-  const db = getDB()
-  const librarian = db.librarians.find((item) => item.librarian_id === Number(librarianId))
-  if (!librarian) throw new Error('Librarian not found.')
-
-  db.librarians = db.librarians.filter(
-    (item) => item.librarian_id !== librarian.librarian_id,
-  )
-  // Keep transaction history intact; the UI renders a "Former librarian" fallback.
-  db.borrows = db.borrows.map((borrow) =>
-    borrow.librarian_id === librarian.librarian_id
-      ? {
-          ...borrow,
-          librarian_id: null,
-          processed_by_role: borrow.processed_by_role || ROLE.LIBRARIAN,
-        }
-      : borrow,
-  )
-  saveDB(db)
-  return true
+export function deleteLibrarian() {
+  throw new Error('Librarian deletion is temporarily unavailable to preserve loan history.')
 }
 
 export function updateOwnProfile(role, id, { firstName, lastName, contactNumber }) {
