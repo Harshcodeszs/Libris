@@ -92,7 +92,7 @@ export default function Catalog() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Catalog"
-        title="Browse the collection"
+        title="Browse the Collection"
         description={`${books.length} titles on the shelves, ${availableCount} available right now. Each listing is a single physical copy.`}
         actions={
           <div className="rounded-xl border border-cream-300 bg-white px-3.5 py-2 text-xs text-ink-muted shadow-sm">

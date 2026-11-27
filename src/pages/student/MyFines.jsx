@@ -67,7 +67,7 @@ export default function MyFines() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="My fines"
-        title="Fines and payments"
+        title="Fines and Payments"
         description="Fines are issued by library staff. Outstanding balances block new borrowing until settled at the desk."
         actions={
           <Button as={Link} to="/loans" variant="secondary">

@@ -152,9 +152,7 @@ export default function Login() {
             Create a student account
           </Button>
 
-          <p className="mt-6 text-center text-[11px] leading-relaxed text-ink-faint">
-            Account data is stored locally in this browser.
-          </p>
+          
         </div>
       </div>
     </div>

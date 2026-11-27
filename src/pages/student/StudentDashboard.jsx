@@ -80,7 +80,7 @@ export default function StudentDashboard() {
   }, [user.id])
 
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening'
   const maxLoan = student?.max_loan || 5
   const usage = Math.round((data.active.length / maxLoan) * 100)
 

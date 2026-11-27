@@ -61,9 +61,7 @@ export default function PublicLayout() {
             <span className="hidden text-sm text-ink-faint sm:inline">·</span>
             <p className="text-sm text-ink-faint">{BRAND.library}</p>
           </div>
-          <p className="text-xs leading-relaxed text-ink-faint">
-            Data is stored locally in this browser. © {new Date().getFullYear()} {BRAND.name}.
-          </p>
+          
         </div>
       </footer>
     </div>

@@ -34,7 +34,7 @@ export default function LibrarianDashboard() {
   const overdue = useMemo(() => getOverdueLoans().slice(0, 5), [])
 
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening'
 
   return (
     <div className="space-y-7">

@@ -212,12 +212,12 @@ export default function AppShell() {
           </div>
         </main>
 
-        <footer className="border-t border-cream-200 px-4 py-4 text-xs text-ink-faint sm:px-6 lg:px-8">
+        {/* <footer className="border-t border-cream-200 px-4 py-4 text-xs text-ink-faint sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-7xl flex-col gap-1 sm:flex-row sm:justify-between">
             <span>Libris Library Borrowing System</span>
-            <span>Data is stored locally in your browser.</span>
+            
           </div>
-        </footer>
+        </footer> */}
       </div>
     </div>
   )

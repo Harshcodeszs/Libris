@@ -31,7 +31,8 @@ export default function SuperDashboard() {
   const maxLoans = Math.max(...workload.map((item) => item.loans), 1)
 
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening '
+
 
   return (
     <div className="space-y-7">

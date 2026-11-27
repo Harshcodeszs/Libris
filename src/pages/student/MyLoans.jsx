@@ -103,7 +103,7 @@ export default function MyLoans() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="My loans"
-        title="Borrowing history"
+        title="Borrowing History"
         description="Track requests waiting for approval, current due dates, and every loan you have returned."
         actions={
           <Button as={Link} to="/catalog">

@@ -94,7 +94,7 @@ export default function Profile() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Account"
-        title="Profile & settings"
+        title="Profile and Settings"
         description="Keep your name and contact details current. Your email is the sign-in identity and cannot be edited here."
       />
 
