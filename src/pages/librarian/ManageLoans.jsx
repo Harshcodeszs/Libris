@@ -159,7 +159,7 @@ export default function ManageLoans() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Circulation"
-        title="Borrow & return"
+        title="Borrow and Return"
         description="Approve student requests, issue a loan at the desk, or close one when the copy comes back. Overdue fines are created automatically on return."
         actions={
           <>

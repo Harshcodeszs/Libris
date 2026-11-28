@@ -41,7 +41,7 @@ export default function ManageStudents() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Students"
-        title="Student directory"
+        title="Student Directory"
         description="Look up a borrower, check their current loans and see any outstanding fines. Records are read-only here."
       />
 

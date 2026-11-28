@@ -146,7 +146,7 @@ export default function ManageFines() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Fines"
-        title="Fines & payments"
+        title="Fines and Payments"
         description="Collect or waive charges, or record a manual fine for a damaged or lost copy. Overdue fines are created automatically when a late loan is returned."
         actions={
           <Button onClick={openIssue}>

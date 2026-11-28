@@ -140,7 +140,7 @@ export default function ManageBooks() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Catalog"
-        title="Manage books"
+        title="Manage Books"
         description="Each row is one physical copy. Copies on loan cannot be deleted or marked unavailable until they are returned."
         actions={
           <Button onClick={openCreate}>

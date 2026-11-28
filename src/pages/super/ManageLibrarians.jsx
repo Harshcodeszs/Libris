@@ -153,7 +153,7 @@ export default function ManageLibrarians() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Administration"
-        title="Librarian accounts"
+        title="Librarian Accounts"
         description="Create and edit librarian accounts. Deletion is temporarily unavailable. Superlibrarian accounts are separate and cannot be managed from here."
         actions={
           <Button onClick={openCreate}>

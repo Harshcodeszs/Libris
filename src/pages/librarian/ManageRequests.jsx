@@ -143,7 +143,7 @@ export default function ManageRequests() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Circulation"
-        title="Borrow requests"
+        title="Borrow Requests"
         description="Review what students have asked to borrow. A copy is only marked Borrowed after you approve the request."
       />
 
